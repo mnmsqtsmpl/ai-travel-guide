@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0f1e">
+<title>Странник — AI Гид</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@300;400;600;900&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root {
+  --ink: #0a0f1e;
+  --ink2: #111827;
+  --paper: #f0ece3;
+  --gold: #c9a84c;
+  --gold2: #e8c97a;
+  --teal: #2dd4bf;
+  --red: #ef4444;
+  --muted: #6b7280;
+  --glass: rgba(10,15,30,0.82);
+  --border: rgba(201,168,76,0.25);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body { height: 100%; overflow: hidden; background: var(--ink); font-family: 'Jost', sans-serif; }
+
+/* ─── MAP ─── */
+#map {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  filter: saturate(0.6) brightness(0.75);
+}
+
+/* ─── OVERLAY UI ─── */
+#ui {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── TOP BAR ─── */
+#topbar {
+  pointer-events: all;
+  padding: 48px 20px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(10,15,30,0.95) 60%, transparent);
+}
+
+.logo {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.logo-main {
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  font-size: 22px;
+  color: var(--gold);
+  letter-spacing: -0.5px;
+}
+.logo-sub {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+#settings-btn {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  color: var(--gold);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(12px);
+  transition: all 0.2s;
+}
+#settings-btn:active { transform: scale(0.9); }
+
+/* ─── SPACER ─── */
+.spacer { flex: 1; }
+
+/* ─── STATUS PILL ─── */
+#status-pill {
+  pointer-events: none;
+  align-self: center;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--paper);
+  letter-spacing: 0.5px;
+  margin: 8px auto;
+  max-width: 80%;
+  text-align: center;
+  transition: opacity 0.3s;
+  opacity: 0;
+}
+#status-pill.visible { opacity: 1; }
+
+/* ─── BOTTOM PANEL ─── */
+#bottom {
+  pointer-events: all;
+  padding: 0 16px 32px;
+  background: linear-gradient(to top, rgba(10,15,30,0.98) 70%, transparent);
+}
+
+/* ─── MAIN ACTION BTN ─── */
+#main-btn {
+  width: 100%;
+  padding: 18px;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  border: none;
+  border-radius: 16px;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(201,168,76,0.3);
+}
+#main-btn:active { transform: scale(0.97); }
+#main-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+#main-btn .btn-shine {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255,255,255,0.25) 50%, transparent 60%);
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+#main-btn:not(:disabled):hover .btn-shine { transform: translateX(100%); }
+
+/* ─── SPOT CARD ─── */
+#spot-card {
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(20px);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 12px;
+  display: none;
+  animation: slideUp 0.4s cubic-bezier(0.16,1,0.3,1);
+}
+#spot-card.visible { display: block; }
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.spot-number {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.spot-name {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 16px;
+  color: var(--paper);
+  font-weight: 600;
+  margin-bottom: 8px;
+  line-height: 1.3;
+}
+.spot-desc {
+  font-size: 13px;
+  color: rgba(240,236,227,0.7);
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.spot-actions {
+  display: flex;
+  gap: 10px;
+}
+.spot-btn {
+  flex: 1;
+  padding: 12px;
+  border-radius: 12px;
+  border: none;
+  font-family: 'Jost', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.spot-btn:active { transform: scale(0.95); }
+.spot-btn.primary {
+  background: var(--teal);
+  color: var(--ink);
+}
+.spot-btn.secondary {
+  background: rgba(240,236,227,0.1);
+  color: var(--paper);
+  border: 1px solid var(--border);
+}
+
+/* ─── GUIDE PANEL ─── */
+#guide-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: var(--ink2);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(100%);
+  transition: transform 0.45s cubic-bezier(0.16,1,0.3,1);
+}
+#guide-panel.open { transform: translateY(0); }
+
+.guide-header {
+  padding: 56px 24px 20px;
+  background: linear-gradient(135deg, #0a0f1e, #111827);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+.guide-label {
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.guide-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 20px;
+  color: var(--paper);
+  font-weight: 600;
+  line-height: 1.3;
+}
+#close-guide {
+  position: absolute;
+  top: 52px;
+  right: 20px;
+  background: rgba(240,236,227,0.08);
+  border: 1px solid var(--border);
+  color: var(--paper);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.guide-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  -webkit-overflow-scrolling: touch;
+}
+
+#guide-text {
+  font-size: 16px;
+  line-height: 1.85;
+  color: rgba(240,236,227,0.88);
+  white-space: pre-wrap;
+}
+
+.guide-footer {
+  padding: 16px 24px 40px;
+  background: rgba(10,15,30,0.95);
+  border-top: 1px solid var(--border);
+  display: flex;
+  gap: 12px;
+}
+.guide-footer button {
+  flex: 1;
+  padding: 14px;
+  border-radius: 14px;
+  border: none;
+  font-family: 'Jost', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.guide-footer button:active { transform: scale(0.95); }
+#tts-btn {
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  color: var(--ink);
+  font-weight: 600;
+}
+#tts-btn.speaking {
+  background: linear-gradient(135deg, var(--red), #f87171);
+}
+#tts-close-btn {
+  background: rgba(240,236,227,0.08);
+  color: var(--paper);
+  border: 1px solid var(--border) !important;
+}
+
+/* ─── SETTINGS MODAL ─── */
+#settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(10,15,30,0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: flex-end;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+#settings-modal.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.settings-sheet {
+  width: 100%;
+  background: var(--ink2);
+  border-radius: 24px 24px 0 0;
+  border-top: 1px solid var(--border);
+  padding: 24px 20px 48px;
+  transform: translateY(30px);
+  transition: transform 0.3s;
+}
+#settings-modal.open .settings-sheet { transform: translateY(0); }
+
+.settings-title {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 14px;
+  color: var(--gold);
+  margin-bottom: 20px;
+  letter-spacing: 1px;
+}
+.field-label {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  margin-top: 16px;
+}
+.field-input {
+  width: 100%;
+  background: rgba(240,236,227,0.06);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-family: 'Jost', sans-serif;
+  font-size: 14px;
+  color: var(--paper);
+  outline: none;
+  transition: border-color 0.2s;
+}
+.field-input:focus { border-color: var(--gold); }
+.field-input::placeholder { color: var(--muted); }
+.field-hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.5;
+}
+.settings-save {
+  width: 100%;
+  margin-top: 24px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  border: none;
+  border-radius: 14px;
+  font-family: 'Unbounded', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+
+/* ─── LOADING OVERLAY ─── */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: var(--ink);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  transition: opacity 0.5s;
+}
+#loading.hidden { opacity: 0; pointer-events: none; }
+
+.loading-logo {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--gold);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.loading-sub {
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+.loader-dots {
+  display: flex;
+  gap: 6px;
+}
+.loader-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gold);
+  animation: bounce 1.2s ease-in-out infinite;
+}
+.loader-dots span:nth-child(2) { animation-delay: 0.2s; }
+.loader-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50% { transform: translateY(-8px); opacity: 1; }
+}
+
+/* ─── ROUTE INFO ─── */
+#route-info {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  pointer-events: all;
+  display: none;
+}
+#route-info.visible { display: flex; }
+.route-stat {
+  flex: 1;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 12px;
+  text-align: center;
+}
+.route-stat-val {
+  font-family: 'Unbounded', sans-serif;
+  font-size: 16px;
+  color: var(--gold);
+  font-weight: 600;
+}
+.route-stat-lbl {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 2px;
+}
+
+/* ─── MARKERS ─── */
+.custom-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+.custom-marker .inner {
+  width: 22px;
+  height: 22px;
+  background: var(--ink2);
+  border-radius: 50%;
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-family: 'Unbounded', sans-serif;
+  font-weight: 900;
+  color: var(--paper);
+}
+.marker-active .custom-marker {
+  transform: rotate(-45deg) scale(1.2);
+}
+.user-marker {
+  width: 16px;
+  height: 16px;
+  background: var(--teal);
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 0 0 4px rgba(45,212,191,0.3), 0 4px 12px rgba(0,0,0,0.4);
+  animation: userPulse 2s ease-in-out infinite;
+}
+@keyframes userPulse {
+  0%, 100% { box-shadow: 0 0 0 4px rgba(45,212,191,0.3), 0 4px 12px rgba(0,0,0,0.4); }
+  50% { box-shadow: 0 0 0 10px rgba(45,212,191,0.1), 0 4px 12px rgba(0,0,0,0.4); }
+}
+
+/* Leaflet override */
+.leaflet-control-zoom { display: none; }
+.leaflet-popup { display: none; }
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <div class="loading-logo">СТРАННИК</div>
+  <div class="loading-sub">AI Аудиогид</div>
+  <div class="loader-dots">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<!-- Map -->
+<div id="map"></div>
+
+<!-- Main UI -->
+<div id="ui">
+  <div id="topbar">
+    <div class="logo">
+      <div class="logo-main">СТРАННИК</div>
+      <div class="logo-sub">AI Аудиогид</div>
+    </div>
+    <button id="settings-btn">⚙</button>
+  </div>
+
+  <div id="status-pill">Определяю местоположение...</div>
+
+  <div class="spacer"></div>
+
+  <div id="bottom">
+    <div id="route-info">
+      <div class="route-stat">
+        <div class="route-stat-val" id="stat-points">0</div>
+        <div class="route-stat-lbl">Точек</div>
+      </div>
+      <div class="route-stat">
+        <div class="route-stat-val" id="stat-dist">—</div>
+        <div class="route-stat-lbl">Радиус</div>
+      </div>
+    </div>
+    <div id="spot-card"></div>
+    <button id="main-btn" disabled>
+      <span class="btn-shine"></span>
+      <span id="main-btn-text">Загрузка...</span>
+    </button>
+  </div>
+</div>
+
+<!-- Guide Panel -->
+<div id="guide-panel">
+  <div class="guide-header">
+    <div class="guide-label">Аудиогид — Остановка</div>
+    <div class="guide-title" id="guide-spot-name">—</div>
+    <button id="close-guide">✕</button>
+  </div>
+  <div class="guide-body">
+    <div id="guide-text">Генерирую рассказ...</div>
+  </div>
+  <div class="guide-footer">
+    <button id="tts-btn">▶ Озвучить</button>
+    <button id="tts-close-btn">Закрыть</button>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settings-modal">
+  <div class="settings-sheet">
+    <div class="settings-title">⚙ НАСТРОЙКИ</div>
+    <div class="field-label">Gemini API Ключ</div>
+    <input class="field-input" id="api-key-input" type="password" placeholder="AIza...">
+    <div class="field-hint">
+      Получить бесплатно: <strong style="color:var(--gold)">aistudio.google.com</strong><br>
+      Ключ хранится только в вашем браузере.
+    </div>
+    <div class="field-label">Радиус поиска</div>
+    <select class="field-input" id="radius-input">
+      <option value="2000">2 км</option>
+      <option value="3500" selected>3.5 км</option>
+      <option value="5000">5 км</option>
+    </select>
+    <button class="settings-save" id="save-settings">СОХРАНИТЬ</button>
+  </div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────
+let state = {
+  apiKey: localStorage.getItem('gemini_key') || '',
+  radius: parseInt(localStorage.getItem('radius') || '3500'),
+  userPos: null,
+  spots: [],
+  activeSpot: null,
+  markers: [],
+  userMarker: null,
+  routeLayer: null,
+  speaking: false,
+  utterance: null,
+  mapReady: false
+};
+
+// ─── MAP INIT ─────────────────────────────────────────────────────
+const map = L.map('map', {
+  zoomControl: false,
+  attributionControl: false
+}).setView([55.75, 37.62], 13);
+
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png', {
+  maxZoom: 19
+}).addTo(map);
+
+// ─── DOM REFS ─────────────────────────────────────────────────────
+const $mainBtn     = document.getElementById('main-btn');
+const $mainBtnText = document.getElementById('main-btn-text');
+const $statusPill  = document.getElementById('status-pill');
+const $spotCard    = document.getElementById('spot-card');
+const $guidePanel  = document.getElementById('guide-panel');
+const $guideText   = document.getElementById('guide-text');
+const $guideTitle  = document.getElementById('guide-spot-name');
+const $ttsBtn      = document.getElementById('tts-btn');
+const $routeInfo   = document.getElementById('route-info');
+const $loading     = document.getElementById('loading');
+const $settingsModal = document.getElementById('settings-modal');
+
+// ─── HELPERS ─────────────────────────────────────────────────────
+function showStatus(msg, duration=3000) {
+  $statusPill.textContent = msg;
+  $statusPill.classList.add('visible');
+  if (duration > 0) setTimeout(() => $statusPill.classList.remove('visible'), duration);
+}
+
+function setBtn(text, disabled=false) {
+  $mainBtnText.textContent = text;
+  $mainBtn.disabled = disabled;
+}
+
+function markerColors() {
+  return ['#c9a84c','#2dd4bf','#818cf8','#f97316','#ec4899','#84cc16','#f59e0b'];
+}
+
+function createMarkerIcon(index, color) {
+  const el = document.createElement('div');
+  el.className = 'custom-marker';
+  el.style.background = color;
+  el.innerHTML = `<div class="inner">${index+1}</div>`;
+  return L.divIcon({ html: el, iconSize: [36,36], iconAnchor: [18,36], className: '' });
+}
+
+function createUserIcon() {
+  const el = document.createElement('div');
+  el.className = 'user-marker';
+  return L.divIcon({ html: el, iconSize: [16,16], iconAnchor: [8,8], className: '' });
+}
+
+function distanceKm(a, b) {
+  const R = 6371;
+  const dLat = (b.lat-a.lat)*Math.PI/180;
+  const dLon = (b.lng-a.lng)*Math.PI/180;
+  const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  setTimeout(() => $loading.classList.add('hidden'), 800);
+  loadSettings();
+  getLocation();
+});
+
+function loadSettings() {
+  document.getElementById('api-key-input').value = state.apiKey;
+  document.getElementById('radius-input').value = state.radius;
+}
+
+// ─── GEO ──────────────────────────────────────────────────────────
+function getLocation() {
+  showStatus('Определяю местоположение...', 0);
+  if (!navigator.geolocation) {
+    showStatus('Геолокация недоступна', 5000);
+    setBtn('Геолокация недоступна', true);
+    return;
+  }
+  navigator.geolocation.getCurrentPosition(onGeo, onGeoErr, {
+    enableHighAccuracy: true, timeout: 15000, maximumAge: 30000
+  });
+}
+
+function onGeo(pos) {
+  state.userPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  map.setView([state.userPos.lat, state.userPos.lng], 15);
+
+  if (state.userMarker) state.userMarker.remove();
+  state.userMarker = L.marker(
+    [state.userPos.lat, state.userPos.lng],
+    { icon: createUserIcon(), zIndexOffset: 1000 }
+  ).addTo(map);
+
+  showStatus('Местоположение найдено ✓');
+  if (state.apiKey) {
+    setBtn('Построить маршрут прогулки');
+    $mainBtn.disabled = false;
+  } else {
+    setBtn('Укажите API ключ в настройках');
+    $mainBtn.disabled = true;
+    setTimeout(() => openSettings(), 1200);
+  }
+}
+
+function onGeoErr(e) {
+  showStatus('Не удалось определить позицию', 5000);
+  setBtn('Не удалось получить геолокацию', true);
+}
+
+// ─── OVERPASS: fetch POI ──────────────────────────────────────────
+async function fetchPOI(lat, lng, radiusM) {
+  const query = `
+[out:json][timeout:25];
+(
+  node["tourism"~"attraction|museum|viewpoint|artwork|monument|historic"](around:${radiusM},${lat},${lng});
+  node["historic"~"monument|memorial|castle|ruins|archaeological_site|church"](around:${radiusM},${lat},${lng});
+  node["amenity"~"place_of_worship"](around:${radiusM},${lat},${lng});
+  node["leisure"~"park|garden"](around:${radiusM},${lat},${lng});
+  node["natural"~"peak|cliff|water|bay"](around:${radiusM},${lat},${lng});
+  way["tourism"~"attraction|museum|viewpoint"](around:${radiusM},${lat},${lng});
+  way["historic"](around:${radiusM},${lat},${lng});
+  way["leisure"~"park|garden"](around:${radiusM},${lat},${lng});
+);
+out center 80;`;
+
+  const resp = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: query,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+  });
+  if (!resp.ok) throw new Error('Overpass API недоступен');
+  const data = await resp.json();
+
+  return data.elements
+    .map(el => ({
+      id: el.id,
+      name: el.tags?.name || el.tags?.['name:ru'] || el.tags?.['name:en'] || null,
+      lat: el.lat || el.center?.lat,
+      lng: el.lon || el.center?.lon,
+      tags: el.tags || {}
+    }))
+    .filter(el => el.name && el.lat && el.lng);
+}
+
+// ─── GEMINI: select & describe spots ─────────────────────────────
+async function selectSpots(pois, userLat, userLng) {
+  const poiList = pois.slice(0, 60).map((p, i) =>
+    `${i}: ${p.name} (lat:${p.lat.toFixed(5)}, lng:${p.lng.toFixed(5)}, теги:${Object.entries(p.tags).slice(0,3).map(([k,v])=>`${k}=${v}`).join(',')})`
+  ).join('\n');
+
+  const prompt = `Ты — эксперт по городским прогулкам. Пользователь находится в точке lat=${userLat.toFixed(5)}, lng=${userLng.toFixed(5)}.
+
+Вот список мест поблизости из OpenStreetMap:
+${poiList}
+
+Выбери 5-7 самых интересных мест для пешеходной прогулки. Учитывай разнообразие (история, природа, архитектура), логичный маршрут и пешеходную доступность.
+
+Ответь ТОЛЬКО JSON (без markdown, без комментариев):
+[
+  {
+    "index": <номер из списка>,
+    "name": "<красивое название на русском>",
+    "short": "<2-3 предложения — что это, почему интересно>"
+  }
+]`;
+
+  const resp = await callGemini(prompt);
+  const json = resp.replace(/```json|```/g, '').trim();
+  const selected = JSON.parse(json);
+
+  return selected.map(s => {
+    const poi = pois[s.index];
+    return {
+      name: s.name,
+      short: s.short,
+      lat: poi.lat,
+      lng: poi.lng,
+      tags: poi.tags
+    };
+  }).filter(s => s.lat && s.lng);
+}
+
+// ─── GEMINI: generate guide story ────────────────────────────────
+async function generateGuide(spot) {
+  const tags = Object.entries(spot.tags || {}).slice(0, 6).map(([k,v]) => `${k}=${v}`).join(', ');
+  const prompt = `Ты — харизматичный русскоязычный гид. Расскажи о месте так, будто ты стоишь рядом с посетителем.
+
+Место: ${spot.name}
+Координаты: ${spot.lat.toFixed(5)}, ${spot.lng.toFixed(5)}
+Теги OSM: ${tags}
+
+Правила:
+- Рассказ 150-200 слов, живым разговорным языком
+- Начни с яркой фразы, захватывающей внимание
+- Упомяни историю, интересный факт или легенду
+- Закончи советом — на что обратить внимание прямо сейчас
+- Обращайся к слушателю на "вы"
+- НЕ используй markdown, только чистый текст`;
+
+  return await callGemini(prompt);
+}
+
+// ─── GEMINI API CALL ──────────────────────────────────────────────
+async function callGemini(prompt) {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${state.apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.8, maxOutputTokens: 1024 }
+      })
+    }
+  );
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Gemini error ${resp.status}`);
+  }
+  const data = await resp.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+// ─── BUILD ROUTE ──────────────────────────────────────────────────
+async function buildRoute() {
+  if (!state.userPos) { showStatus('Нет геолокации'); return; }
+  if (!state.apiKey)  { openSettings(); return; }
+
+  setBtn('Ищу места рядом...', true);
+  showStatus('Запрашиваю карту мест...', 0);
+  clearMap();
+
+  try {
+    const pois = await fetchPOI(state.userPos.lat, state.userPos.lng, state.radius);
+    if (pois.length < 3) {
+      showStatus('Мало мест в базе OpenStreetMap, попробуйте больший радиус', 5000);
+      setBtn('Построить маршрут прогулки');
+      $mainBtn.disabled = false;
+      return;
+    }
+
+    showStatus(`Найдено ${pois.length} мест, выбираю лучшие...`, 0);
+    state.spots = await selectSpots(pois, state.userPos.lat, state.userPos.lng);
+
+    if (!state.spots.length) throw new Error('Не удалось выбрать маршрут');
+
+    placeMarkers();
+    showStatus(`Маршрут готов: ${state.spots.length} точек ✓`);
+    setBtn('Обновить маршрут');
+    $mainBtn.disabled = false;
+
+    document.getElementById('stat-points').textContent = state.spots.length;
+    document.getElementById('stat-dist').textContent = state.radius >= 1000
+      ? (state.radius/1000).toFixed(1) + ' км'
+      : state.radius + ' м';
+    $routeInfo.classList.add('visible');
+
+    showSpotCard(0);
+
+  } catch(e) {
+    console.error(e);
+    showStatus('Ошибка: ' + e.message, 6000);
+    setBtn('Попробовать снова');
+    $mainBtn.disabled = false;
+  }
+}
+
+// ─── MAP MARKERS ──────────────────────────────────────────────────
+function clearMap() {
+  state.markers.forEach(m => m.remove());
+  state.markers = [];
+  if (state.routeLayer) { state.routeLayer.remove(); state.routeLayer = null; }
+  $spotCard.classList.remove('visible');
+  $routeInfo.classList.remove('visible');
+}
+
+function placeMarkers() {
+  const colors = markerColors();
+  const latlngs = [[state.userPos.lat, state.userPos.lng]];
+
+  state.spots.forEach((spot, i) => {
+    const color = colors[i % colors.length];
+    const marker = L.marker([spot.lat, spot.lng], {
+      icon: createMarkerIcon(i, color)
+    }).addTo(map);
+
+    marker.on('click', () => showSpotCard(i));
+    state.markers.push(marker);
+    latlngs.push([spot.lat, spot.lng]);
+  });
+
+  // Dashed route line
+  state.routeLayer = L.polyline(
+    state.spots.map(s => [s.lat, s.lng]),
+    { color: 'rgba(201,168,76,0.4)', weight: 2, dashArray: '6,10' }
+  ).addTo(map);
+
+  const bounds = L.latLngBounds(latlngs).pad(0.15);
+  map.fitBounds(bounds);
+}
+
+// ─── SPOT CARD ────────────────────────────────────────────────────
+function showSpotCard(index) {
+  state.activeSpot = index;
+  const spot = state.spots[index];
+  const colors = markerColors();
+  const color = colors[index % colors.length];
+
+  $spotCard.innerHTML = `
+    <div class="spot-number" style="color:${color}">ТОЧКА ${index+1} / ${state.spots.length}</div>
+    <div class="spot-name">${spot.name}</div>
+    <div class="spot-desc">${spot.short}</div>
+    <div class="spot-actions">
+      <button class="spot-btn primary" onclick="openGuide(${index})">🎙 Рассказ гида</button>
+      <button class="spot-btn secondary" onclick="focusSpot(${index})">📍 На карте</button>
+    </div>
+  `;
+  $spotCard.classList.add('visible');
+
+  // Highlight marker
+  state.markers.forEach((m, i) => {
+    m.getElement()?.closest('.marker-active')?.classList.remove('marker-active');
+    if (i === index) m.getElement()?.parentElement?.classList.add('marker-active');
+  });
+}
+
+function focusSpot(index) {
+  const spot = state.spots[index];
+  map.flyTo([spot.lat, spot.lng], 17, { duration: 1.2 });
+}
+
+// ─── GUIDE PANEL ──────────────────────────────────────────────────
+async function openGuide(index) {
+  const spot = state.spots[index];
+  $guideTitle.textContent = spot.name;
+  $guideText.textContent = 'Генерирую рассказ гида...';
+  $guidePanel.classList.add('open');
+  stopTTS();
+
+  try {
+    const story = await generateGuide(spot);
+    $guideText.textContent = story;
+    spot._story = story; // cache
+  } catch(e) {
+    $guideText.textContent = 'Не удалось сгенерировать рассказ: ' + e.message;
+  }
+}
+
+document.getElementById('close-guide').addEventListener('click', () => {
+  $guidePanel.classList.remove('open');
+  stopTTS();
+});
+
+document.getElementById('tts-close-btn').addEventListener('click', () => {
+  $guidePanel.classList.remove('open');
+  stopTTS();
+});
+
+// ─── TTS ──────────────────────────────────────────────────────────
+$ttsBtn.addEventListener('click', () => {
+  if (state.speaking) { stopTTS(); return; }
+
+  const text = $guideText.textContent;
+  if (!text || text.includes('Генерирую')) return;
+
+  if (!window.speechSynthesis) {
+    showStatus('TTS не поддерживается браузером', 3000);
+    return;
+  }
+
+  state.utterance = new SpeechSynthesisUtterance(text);
+  state.utterance.lang = 'ru-RU';
+  state.utterance.rate = 0.95;
+  state.utterance.pitch = 1.0;
+
+  // Try to pick a Russian voice
+  const voices = speechSynthesis.getVoices();
+  const ruVoice = voices.find(v => v.lang.startsWith('ru'));
+  if (ruVoice) state.utterance.voice = ruVoice;
+
+  state.utterance.onstart = () => {
+    state.speaking = true;
+    $ttsBtn.textContent = '⏹ Остановить';
+    $ttsBtn.classList.add('speaking');
+  };
+  state.utterance.onend = () => stopTTS();
+  state.utterance.onerror = () => stopTTS();
+
+  speechSynthesis.speak(state.utterance);
+});
+
+function stopTTS() {
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  state.speaking = false;
+  $ttsBtn.textContent = '▶ Озвучить';
+  $ttsBtn.classList.remove('speaking');
+}
+
+// ─── SETTINGS ─────────────────────────────────────────────────────
+function openSettings() {
+  $settingsModal.classList.add('open');
+}
+
+document.getElementById('settings-btn').addEventListener('click', openSettings);
+
+$settingsModal.addEventListener('click', e => {
+  if (e.target === $settingsModal) $settingsModal.classList.remove('open');
+});
+
+document.getElementById('save-settings').addEventListener('click', () => {
+  const key = document.getElementById('api-key-input').value.trim();
+  const radius = parseInt(document.getElementById('radius-input').value);
+
+  if (!key) { showStatus('Введите API ключ!', 3000); return; }
+
+  state.apiKey = key;
+  state.radius = radius;
+  localStorage.setItem('gemini_key', key);
+  localStorage.setItem('radius', radius);
+
+  $settingsModal.classList.remove('open');
+  showStatus('Настройки сохранены ✓');
+
+  if (state.userPos) {
+    setBtn('Построить маршрут прогулки');
+    $mainBtn.disabled = false;
+  }
+});
+
+// ─── MAIN BUTTON ──────────────────────────────────────────────────
+$mainBtn.addEventListener('click', buildRoute);
+
+// ─── VOICE INIT ───────────────────────────────────────────────────
+if (window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+</script>
+</body>
+</html>
